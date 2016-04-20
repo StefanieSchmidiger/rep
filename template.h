@@ -14,6 +14,8 @@
 #include "debug.h"
 #include "template_ipc.h"
 #include <stdio.h>
+#include <stdlib.h>
+
 
 /*--------------------------- Settings ------------------------------*/
 /*! @brief The number of frame buffers used. */
@@ -55,9 +57,10 @@ struct IPC_DATA
  * */
 enum IMG_TYPE
 {
-	SENSORIMG,
- 	BACKGROUND,
- 	THRESHOLD,
+	SENSORIMG,  // Kamerabild
+ 	BACKGROUND, // Hintergrundbild
+ 	THRESHOLD,  // Vordergund nach Dilatation
+ 	DIFFIMAGE,
  	INDEX0,
  	INDEX1,
  	ADDINFO,//do not use this index for image processing as it is used for parsing the drawing info to cgi.c
