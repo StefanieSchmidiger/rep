@@ -9,6 +9,8 @@
 
 /* Definitions specific to this application. Also includes the Oscar main header file. */
 #include "template.h"
+#include <vis.h>
+#include <bmp.h>
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
@@ -18,11 +20,14 @@
 const int nc = OSC_CAM_MAX_IMAGE_WIDTH;
 const int nr = OSC_CAM_MAX_IMAGE_HEIGHT;
 const double BETA = 0.99;
+const int MinArea = 500;
 
 int TextColor;
 const int Border = 1;	// Grösse des konstanten Randes
 float bgrImg[IMG_SIZE]; // Zwischenspeicher des Bildes als Float für Mittelwertbildung
 const int frgLimit = 100; // Nach wievielen Pixeln der Vordergrund in den Hintergrund eingebunden wird
+struct OSC_PICTURE Pic;
+struct OSC_VIS_REGIONS ImgRegions;
 
 
 
@@ -33,6 +38,9 @@ void ProcessFrame();
 void SetBackground();
 void Erode_3x3(int InIndex, int OutIndex);
 void Dilate_3x3(int InIndex, int OutIndex);
+void DetectRegions();
+void DrawBoundingBoxes();
+
 
 
 
@@ -49,7 +57,7 @@ void ResetProcess()	// when blue button (refresh) is pressed, this is executed
 
 void ProcessFrame()
 {
-	char Text[] = "hallo world";
+	char Text[] = "hallo Stefanie, deine App laeuft!";
 	//initialize counters
 	if (data.ipc.state.nStepCounter == 1)
 	{	// first picture
@@ -68,7 +76,8 @@ void ProcessFrame()
 		// DiffImage = abs(BackGround-ImageAct); // Matlab macht das so, wir müssens mit for-Schleife für jedes Pixel einzeln machen
 
 		ChangeDetection();
-
+		DetectRegions();
+		Erode_3x3(THRESHOLD, INDEX0);
 
 		//example for drawing output
 		//draw line
@@ -102,6 +111,7 @@ void ChangeDetection()
 				data.u8TempImage[THRESHOLD][r + c] = 255;
 				//increase foreground counter
 				data.u8TempImage[INDEX1][r+c]++;
+
 				//check whether limit is reached
 				if(data.u8TempImage[INDEX1][r+c] == frgLimit)
 				{
@@ -162,6 +172,51 @@ void Dilate_3x3(int InIndex, int OutIndex)
 		{
 			unsigned char* p = &data.u8TempImage[InIndex][r+c];
 			data.u8TempImage[OutIndex][r+c] = *(p-nc-1) | *(p-nc) | *(p-nc+1) | *(p-1) | *p | *(p+1) | *(p+nc-1) | *(p+nc) | *(p+nc+1);
+		}
+	}
+}
+
+
+void DetectRegions()
+{
+	// convert all foreground objects to a 1, background objects to a 0
+	// implemented as 0 and 255 now
+	int i;
+	for(i = 0; i < IMG_SIZE; i++)
+	{
+		data.u8TempImage[INDEX0][i] = data.u8TempImage[THRESHOLD][i] ? 1 : 0;
+	}
+	// save properties of picture in structure OSC_PICTURE
+	Pic.data = data.u8TempImage[INDEX0];
+	Pic.width = nc;
+	Pic.height = nr;
+	Pic.type = OSC_PICTURE_BINARY;
+
+	// extract properties and do labelling
+	OscVisLabelBinary(&Pic, &ImgRegions);
+	OscVisGetRegionProperties(&ImgRegions); // ImgRegions.runs struct is filled, was empty before
+
+	DrawBoundingBoxes();
+}
+
+void DrawBoundingBoxes()
+{
+	uint16 o;
+	for(o = 0; o < ImgRegions.noOfObjects; o++)
+	{
+		if(ImgRegions.objects[o].area > MinArea)
+		{
+			DrawBoundingBox(ImgRegions.objects[o].bboxLeft,
+					ImgRegions.objects[o].bboxTop,
+					ImgRegions.objects[o].bboxRight,
+					ImgRegions.objects[o].bboxBottom, false, GREEN);
+			// draw line from top left to bottom right at centre
+			DrawLine(ImgRegions.objects[o].centroidX-10,ImgRegions.objects[o].centroidY-10,
+					ImgRegions.objects[o].centroidX+10,ImgRegions.objects[o].centroidY+10,RED);
+			// draw line from top right to bottom left at centre
+			DrawLine(ImgRegions.objects[o].centroidX+10,ImgRegions.objects[o].centroidY-10,
+					ImgRegions.objects[o].centroidX-10,ImgRegions.objects[o].centroidY+10,RED);
+
 		}
 	}
 }
